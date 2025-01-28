@@ -1,0 +1,6 @@
+@dotent_HostAddress = http://localhost:5190
+
+GET {{dotent_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
