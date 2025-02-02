@@ -1,4 +1,6 @@
 using Dapper;
+using dotent.Repositories;
+using dotent.Services;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 
@@ -6,35 +8,21 @@ namespace dotent.Controllers;
 
 public class MemberController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly MemberService _memberService;
+    private readonly MemberRepository _memberRepository;
 
-    public MemberController(IConfiguration configuration)
+    public MemberController(MemberService memberService, MemberRepository memberRepository)
     {
-        _configuration = configuration;
+        _memberService = memberService;
+        _memberRepository = memberRepository;
     }
-
-    public static List<Member> Members = new List<Member>();
 
     [HttpPost("/api/member")]
     public async Task<IActionResult> Create([FromBody] MemberDto memberDto)
     {
         try
         {
-            const string insertQuery = $"""
-                                        insert into members (first_name, email, phone, address)
-                                        values(@firstName, @email, @phone, @address) 
-                                        """;
-            var connectionString = _configuration.GetConnectionString("Default");
-
-            await using var connection = new NpgsqlConnection(connectionString);
-
-            await connection.ExecuteAsync(insertQuery, new
-            {
-                firstName = memberDto.FirstName,
-                email = memberDto.Email,
-                phone = memberDto.PhoneNumber,
-                address = memberDto.Address
-            });
+            await _memberService.CreateAsync(memberDto);
             return Ok("Member created successfully");
         }
         catch (Exception e)
@@ -48,18 +36,7 @@ public class MemberController : ControllerBase
     {
         try
         {
-            const string selectQuery = $"""
-                                        select * from members where id = @id 
-                                        """;
-            var connectionString = _configuration.GetConnectionString("Default");
-
-            await using var connection = new NpgsqlConnection(connectionString);
-
-            var member = await connection.QueryFirstOrDefaultAsync<Member>(selectQuery,
-                new
-                {
-                    id = id
-                });
+            var member = await _memberRepository.GetByIdAsync(id);
 
             if (member == null)
             {
@@ -76,20 +53,25 @@ public class MemberController : ControllerBase
 
 
     [HttpGet("/api/member")]
-    public IActionResult GetAll([FromQuery] MemberFilterDto filter)
+    public async Task<IActionResult> GetAll([FromQuery] MemberFilterDto filter)
     {
-        var members = Members.Where(x =>
-            (string.IsNullOrEmpty(filter.FirstName) || x.First_Name.Contains(filter.FirstName))
-            && (string.IsNullOrEmpty(filter.Address) || x.Address.Contains(filter.Address))
-        ).ToList();
-        return Ok(members);
+        try
+        {
+            var members = await _memberRepository.GetAllAsync(filter.FirstName);
+            return Ok(members);
+        }
+        catch (Exception e)
+        {
+            return BadRequest(e.Message);
+        }
     }
 
 
     [HttpPut("/api/member/{id}")]
-    public IActionResult Update(int id, [FromBody] MemberDto memberDto)
+    public async Task<IActionResult> Update(int id, [FromBody] MemberDto memberDto)
     {
-        var exisingMember = Members.FirstOrDefault(x => x.Id == id);
+        //var exisingMember = Members.FirstOrDefault(x => x.Id == id);
+        var exisingMember = await _memberRepository.GetByIdAsync(id);
 
         if (exisingMember == null)
         {
@@ -139,4 +121,34 @@ public class Member
     public string Email { get; set; }
     public string Phone { get; set; }
     public string Address { get; set; }
+}
+
+public class BankAccount
+{
+    private readonly Member _member;
+
+    public BankAccount(Member member)
+    {
+        _member = member;
+    }
+
+    public void Deposit(decimal amount)
+    {
+        // Deposit amount to the bank account
+    }
+}
+
+public class ShareAccount
+{
+    private readonly BankAccount _account;
+
+    public ShareAccount(BankAccount account)
+    {
+        _account = account;
+    }
+
+    public void Deposit(decimal amount)
+    {
+        // Deposit amount to the share account
+    }
 }
